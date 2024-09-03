@@ -1,0 +1,120 @@
+import shutil
+import os
+
+# Create the .kaggle directory
+os.makedirs('/root/.kaggle', exist_ok=True)
+
+# Move kaggle.json file from the uploaded location to the .kaggle directory
+shutil.move('/content/kaggle.json', '/root/.kaggle/kaggle.json')
+
+# Change the permissions of the file
+os.chmod('/root/.kaggle/kaggle.json', 600)
+
+# Authenticate with Kaggle
+from kaggle.api.kaggle_api_extended import KaggleApi
+
+api = KaggleApi()
+api.authenticate()
+
+# Download dataset from Kaggle
+dataset = 'neferfufi/lastfm'
+api.dataset_download_files(dataset, path='.', unzip=True)
+
+
+import pandas as pd
+
+# Load the dataset (adjust the file name if necessary)
+filename = '/content/userid-timestamp-artid-artname-traid-traname.tsv'
+df = pd.read_csv(filename, sep='\t', on_bad_lines='skip')
+
+# Display column names
+print(df.columns)
+
+# Display the first few rows
+df.head()
+
+
+import pandas as pd
+
+# Load the dataset with error handling
+filename = '/content/userid-timestamp-artid-artname-traid-traname.tsv'
+try:
+    df = pd.read_csv(filename, sep='\t', header=None, error_bad_lines=False, warn_bad_lines=True)
+except Exception as e:
+    print(f"An error occurred: {e}")
+
+# Manually assign the column names
+df.columns = ['user_id', 'timestamp', 'artist_id', 'artist_name', 'unknown', 'track_name']
+
+# Display column names
+print(df.columns)
+
+# Display the first few rows to inspect
+df.head()
+
+
+# Select the relevant columns and drop rows with missing values
+df = df[['user_id', 'artist_name', 'track_name']].dropna()
+
+# Display the first few rows after preprocessing
+df.head()
+
+!pip install scikit-surprise
+
+# Assign an implicit rating of 1 for each user-track interaction
+df['rating'] = 1
+
+subset_users = df['user_id'].unique()[:100]
+df_subset = df[df['user_id'].isin(subset_users)]
+
+# Verify the reduced DataFrame
+print(df_subset.head())
+print(df_subset.shape)
+# Verify the new DataFrame
+df.head()
+
+from surprise import Dataset, Reader, SVD
+from surprise.model_selection import train_test_split
+from surprise import accuracy
+
+# Load the data into Surprise
+reader = Reader(rating_scale=(1, 1))
+data = Dataset.load_from_df(df[['user_id', 'track_name', 'rating']], reader)
+
+# Split the data into training and testing sets
+trainset, testset = train_test_split(data, test_size=0.2)
+
+# Use the SVD algorithm
+algo = SVD()
+
+# Train the algorithm on the training set
+algo.fit(trainset)
+
+# Test the algorithm on the test set
+predictions = algo.test(testset)
+
+# Compute and print the RMSE
+accuracy.rmse(predictions)
+
+# Function to get song recommendations for a user
+def get_recommendations(user_id, n=10):
+    # Get a list of all songs
+    unique_songs = df['traname'].unique()
+
+    # Predict ratings for all songs not yet rated by the user
+    songs_not_rated = [song for song in unique_songs if not any(df[(df['userid'] == user_id) & (df['traname'] == song)].shape[0])]
+    predictions = [algo.predict(user_id, song) for song in songs_not_rated]
+
+    # Sort predictions by estimated rating
+    predictions.sort(key=lambda x: x.est, reverse=True)
+
+    # Return the top-n recommendations
+    top_n = predictions[:n]
+    return [(pred.iid, pred.est) for pred in top_n]
+
+# Example usage
+user_id = 'some_user_id'  # Replace with an actual user ID from the dataset
+recommendations = get_recommendations(user_id)
+for song, rating in recommendations:
+    print(f'Song: {song}, Predicted Rating: {rating}')
+

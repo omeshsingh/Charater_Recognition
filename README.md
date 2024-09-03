@@ -31,6 +31,7 @@ pip install kaggle pandas scikit-surprise
 ### Kaggle API Credentials
 
 Ensure you have your `kaggle.json` file downloaded from your Kaggle account and upload it to your working directory.
+https://www.kaggle.com/datasets/neferfufi/lastfm is the dataset used here.
 
 ## Usage
 
